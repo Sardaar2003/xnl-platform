@@ -1,0 +1,134 @@
+version: "3.8"
+services:
+  api-gateway:
+    build: .
+    container_name: api-gateway
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - .:/XNL_SOLUTIONS_PROJECT
+      - /XNL_SOLUTIONS_PROJECT/node_modules
+    depends_on:
+      - mongo
+      - rabbitmq
+      - user-service
+      - account-service
+      - transaction-service
+      - notification-service
+
+  user-service:
+    build: ./services/user-service
+    container_name: user-service
+    restart: always
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+    volumes:
+      - ./services/user-service:/XNL_SOLUTIONS_PROJECT/services/user-service
+      - /XNL_SOLUTIONS_PROJECT/services/user-service/node_modules
+    depends_on:
+      - mongo
+      - rabbitmq
+
+  account-service:
+    build: ./services/account-service
+    container_name: account-service
+    restart: always
+    ports:
+      - "3002:3002"
+    env_file:
+      - .env
+    environment:
+      - PORT=3002
+    volumes:
+      - ./services/account-service:/XNL_SOLUTIONS_PROJECT/services/account-service
+      - /XNL_SOLUTIONS_PROJECT/services/account-service/node_modules
+    depends_on:
+      - mongo
+      - rabbitmq
+
+  transaction-service:
+    build: ./services/transaction-service
+    container_name: transaction-service
+    restart: always
+    ports:
+      - "3003:3003"
+    env_file:
+      - .env
+    environment:
+      - PORT=3003
+    volumes:
+      - ./services/transaction-service:/XNL_SOLUTIONS_PROJECT/services/transaction-service
+      - /XNL_SOLUTIONS_PROJECT/services/transaction-service/node_modules
+    depends_on:
+      - mongo
+      - rabbitmq
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: notification-service
+    restart: always
+    ports:
+      - "3004:3004"
+    env_file:
+      - .env
+    environment:
+      - PORT=3004
+    volumes:
+      - ./services/notification-service:/XNL_SOLUTIONS_PROJECT/services/notification-service
+      - /XNL_SOLUTIONS_PROJECT/services/notification-service/node_modules
+    depends_on:
+      - mongo
+      - rabbitmq
+
+  frontend:
+    build: ./frontend/admin-panel
+    container_name: frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/admin-panel:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+      - user-service
+      - account-service
+      - transaction-service
+      - notification-service
+
+  mongo:
+    image: mongo
+    container_name: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: always
+    hostname: rabbit
+    ports:
+      - "15672:15672"  # Management UI
+      - "5672:5672"    # Message broker
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  mongo_data:
+  rabbitmq_data:

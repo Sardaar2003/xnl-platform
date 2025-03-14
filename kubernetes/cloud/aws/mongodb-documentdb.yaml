@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Amazon DocumentDB (MongoDB-compatible) cluster for XNL Fintech Platform'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where the DocumentDB cluster will be deployed
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs where the DocumentDB cluster will be deployed
+
+  MasterUsername:
+    Type: String
+    Description: Master username for the DocumentDB cluster
+    Default: xnladmin
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
+
+  MasterUserPassword:
+    Type: String
+    Description: Master user password for the DocumentDB cluster
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 100
+    ConstraintDescription: Must be at least 8 characters long
+
+  InstanceType:
+    Type: String
+    Description: Instance type for the DocumentDB cluster
+    Default: db.r5.large
+    AllowedValues:
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.12xlarge
+      - db.r5.24xlarge
+
+  InstanceCount:
+    Type: Number
+    Description: Number of instances in the DocumentDB cluster
+    Default: 3
+    MinValue: 1
+    MaxValue: 16
+
+  BackupRetentionPeriod:
+    Type: Number
+    Description: Number of days to retain automated backups
+    Default: 7
+    MinValue: 1
+    MaxValue: 35
+
+  PreferredBackupWindow:
+    Type: String
+    Description: The daily time range during which automated backups are created
+    Default: 02:00-04:00
+
+  PreferredMaintenanceWindow:
+    Type: String
+    Description: The weekly time range during which system maintenance can occur
+    Default: sun:05:00-sun:07:00
+
+Resources:
+  DocumentDBSubnetGroup:
+    Type: AWS::DocDB::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: xnl-fintech-docdb-subnet-group
+      DBSubnetGroupDescription: Subnet group for XNL Fintech DocumentDB cluster
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-subnet-group
+
+  DocumentDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: xnl-fintech-docdb-sg
+      GroupDescription: Security group for XNL Fintech DocumentDB cluster
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-sg
+
+  DocumentDBClusterParameterGroup:
+    Type: AWS::DocDB::DBClusterParameterGroup
+    Properties:
+      Description: Parameter group for XNL Fintech DocumentDB cluster
+      Family: docdb4.0
+      Parameters:
+        audit_logs: enabled
+        tls: enabled
+
+  DocumentDBCluster:
+    Type: AWS::DocDB::DBCluster
+    Properties:
+      DBClusterIdentifier: xnl-fintech-docdb-cluster
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      DBSubnetGroupName: !Ref DocumentDBSubnetGroup
+      VpcSecurityGroupIds:
+        - !GetAtt DocumentDBSecurityGroup.GroupId
+      DBClusterParameterGroupName: !Ref DocumentDBClusterParameterGroup
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      PreferredBackupWindow: !Ref PreferredBackupWindow
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      StorageEncrypted: true
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-cluster
+        - Key: Environment
+          Value: production
+
+  DocumentDBInstance1:
+    Type: AWS::DocDB::DBInstance
+    Properties:
+      DBInstanceIdentifier: xnl-fintech-docdb-instance-1
+      DBClusterIdentifier: !Ref DocumentDBCluster
+      DBInstanceClass: !Ref InstanceType
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-instance-1
+
+  DocumentDBInstance2:
+    Type: AWS::DocDB::DBInstance
+    Condition: CreateAdditionalInstances
+    Properties:
+      DBInstanceIdentifier: xnl-fintech-docdb-instance-2
+      DBClusterIdentifier: !Ref DocumentDBCluster
+      DBInstanceClass: !Ref InstanceType
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-instance-2
+
+  DocumentDBInstance3:
+    Type: AWS::DocDB::DBInstance
+    Condition: CreateThirdInstance
+    Properties:
+      DBInstanceIdentifier: xnl-fintech-docdb-instance-3
+      DBClusterIdentifier: !Ref DocumentDBCluster
+      DBInstanceClass: !Ref InstanceType
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-instance-3
+
+  DocumentDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: xnl-fintech-docdb-secret
+      Description: 'Stores DocumentDB credentials securely'
+      SecretString: !Sub |
+        {
+          "username": "${MasterUsername}",
+          "password": "${MasterUserPassword}",
+          "endpoint": "${DocumentDBCluster.Endpoint}",
+          "port": "${DocumentDBCluster.Port}"
+        }
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-docdb-secret
+Conditions:
+  CreateAdditionalInstances: 
+    Fn::Not:
+      - Fn::Equals:
+          - !Ref InstanceCount
+          - 1
+  CreateThirdInstance:
+    Fn::Equals:
+      - !Ref InstanceCount
+      - 3
+
+Outputs:
+  DocumentDBClusterEndpoint:
+    Description: The connection endpoint for the DocumentDB cluster
+    Value: !GetAtt DocumentDBCluster.Endpoint
+
+  DocumentDBClusterReadEndpoint:
+    Description: The reader endpoint for the DocumentDB cluster
+    Value: !GetAtt DocumentDBCluster.ReadEndpoint
+
+  DocumentDBClusterPort:
+    Description: The port on which the DocumentDB cluster accepts connections
+    Value: !GetAtt DocumentDBCluster.Port
+
+  DocumentDBSecretArn:
+    Description: ARN of the Secret Manager entry for DocumentDB credentials
+    Value: !Ref DocumentDBSecret
+
+  DocumentDBConnectionString:
+    Description: Connection string (without password, use Secrets Manager)
+    Value: !Sub 'mongodb://${MasterUsername}@${DocumentDBCluster.Endpoint}:${DocumentDBCluster.Port}/?replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false'

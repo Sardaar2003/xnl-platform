@@ -1,0 +1,16 @@
+{
+    "version":  "1.0.0",
+    "npmClient":  "npm",
+    "useWorkspaces":  true,
+    "packages":  [
+                     "services/*",
+                     "shared"
+                 ],
+    "command":  {
+                    "bootstrap":  {
+                                      "npmClientArgs":  [
+                                                            "--no-package-lock"
+                                                        ]
+                                  }
+                }
+}

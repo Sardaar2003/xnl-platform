@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - api-gateway-deployment.yaml
+  - api-gateway-service.yaml
+  - user-service-deployment.yaml
+  - user-service-service.yaml
+  - account-service-deployment.yaml
+  - account-service-service.yaml
+  - transaction-service-deployment.yaml
+  - transaction-service-service.yaml
+  - transaction-service-hpa.yaml
+  - notification-service-deployment.yaml
+  - notification-service-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: xnl-fintech
+  app.kubernetes.io/managed-by: kustomize 

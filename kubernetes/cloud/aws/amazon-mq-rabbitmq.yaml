@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Amazon MQ (RabbitMQ) broker for XNL Fintech Platform'
+
+Parameters:
+  VpcId:
+    Type: String
+    Description: VPC ID where the Amazon MQ broker will be deployed
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: List of subnet IDs where the Amazon MQ broker will be deployed
+
+  InstanceType:
+    Type: String
+    Description: The instance type of the Amazon MQ broker
+    Default: mq.m5.large
+    AllowedValues:
+      - mq.t3.micro
+      - mq.m5.large
+      - mq.m5.xlarge
+      - mq.m5.2xlarge
+      - mq.m5.4xlarge
+
+  DeploymentMode:
+    Type: String
+    Description: The deployment mode of the Amazon MQ broker
+    Default: CLUSTER_MULTI_AZ
+    AllowedValues:
+      - SINGLE_INSTANCE
+      - CLUSTER_MULTI_AZ
+
+  AdminUsername:
+    Type: String
+    Description: The username of the admin user
+    Default: xnladmin
+    MinLength: 1
+    MaxLength: 100
+
+  AdminPassword:
+    Type: String
+    Description: The password of the admin user
+    NoEcho: true
+    MinLength: 12
+    MaxLength: 250
+    ConstraintDescription: Must be at least 12 characters long
+
+Resources:
+  RabbitMQSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for XNL Fintech Amazon MQ RabbitMQ broker
+      VpcId: 
+        Ref: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5671
+          ToPort: 5671
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 15671
+          ToPort: 15671
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-rabbitmq-sg
+
+  RabbitMQBroker:
+    Type: AWS::AmazonMQ::Broker
+    Properties:
+      BrokerName: xnl-fintech-rabbitmq
+      DeploymentMode: 
+        Ref: DeploymentMode
+      EngineType: RABBITMQ
+      EngineVersion: 3.10.20
+      HostInstanceType: 
+        Ref: InstanceType
+      PubliclyAccessible: false
+      SecurityGroups:
+        - Ref: RabbitMQSecurityGroup
+      SubnetIds: 
+        Ref: SubnetIds
+      Users:
+        - Username: 
+            Ref: AdminUsername
+          Password: 
+            Ref: AdminPassword
+      Logs:
+        General: true
+      MaintenanceWindowStartTime:
+        DayOfWeek: SUNDAY
+        TimeOfDay: 02:00
+        TimeZone: UTC
+      Tags:
+        Name: xnl-fintech-rabbitmq
+        Environment: production
+
+Outputs:
+  RabbitMQEndpoint:
+    Description: The endpoint of the Amazon MQ RabbitMQ broker
+    Value: 
+      Fn::GetAtt: [RabbitMQBroker, AmqpEndpoints]
+
+  RabbitMQConsoleURL:
+    Description: The web console URL of the Amazon MQ RabbitMQ broker
+    Value: 
+      Fn::GetAtt: [RabbitMQBroker, ConsoleURL]
+
+  RabbitMQConnectionString:
+    Description: Connection string for the Amazon MQ RabbitMQ broker
+    Value: 
+      Fn::Join:
+        - ""
+        - - "amqps://"
+          - Ref: AdminUsername
+          - ":"
+          - Ref: AdminPassword
+          - "@"
+          - Fn::Select: [0, Fn::GetAtt: [RabbitMQBroker, AmqpEndpoints]] 

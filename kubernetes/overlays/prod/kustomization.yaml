@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: xnl-fintech-prod
+
+commonLabels:
+  environment: production
+
+patches:
+  - path: hpa-patch.yaml
+
+configMapGenerator:
+  - name: env-config
+    literals:
+      - NODE_ENV=production
+
+secretGenerator:
+  - name: mongodb-secret
+    literals:
+      - uri=mongodb://mongodb:27017/xnl_prod
+  - name: rabbitmq-secret
+    literals:
+      - url=amqp://guest:guest@rabbitmq:5672
+  - name: jwt-secret
+    literals:
+      - secret=prod-jwt-secret-key
+  - name: email-secret
+    literals:
+      - api-key=prod-email-api-key 

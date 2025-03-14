@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Amazon ElastiCache (Redis) cluster for XNL Fintech Platform'
+
+Parameters:
+  VpcId:
+    Type: String
+    Description: VPC ID where the ElastiCache cluster will be deployed
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: List of subnet IDs where the ElastiCache cluster will be deployed
+
+  NodeType:
+    Type: String
+    Description: The compute and memory capacity of the nodes
+    Default: cache.t3.medium
+    AllowedValues:
+      - cache.t3.small
+      - cache.t3.medium
+      - cache.m5.large
+      - cache.m5.xlarge
+      - cache.m5.2xlarge
+      - cache.r5.large
+      - cache.r5.xlarge
+      - cache.r5.2xlarge
+
+  NumShards:
+    Type: Number
+    Description: Number of shards in the Redis cluster
+    Default: 2
+    MinValue: 1
+    MaxValue: 90
+
+  ReplicasPerShard:
+    Type: Number
+    Description: Number of read replicas per shard
+    Default: 1
+    MinValue: 0
+    MaxValue: 5
+
+Resources:
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for XNL Fintech ElastiCache Redis cluster
+      VpcId: 
+        Ref: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-redis-sg
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnet group for XNL Fintech ElastiCache Redis cluster
+      SubnetIds: 
+        Ref: SubnetIds
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-redis-subnet-group
+
+  RedisParameterGroup:
+    Type: AWS::ElastiCache::ParameterGroup
+    Properties:
+      Description: Parameter group for XNL Fintech ElastiCache Redis cluster
+      CacheParameterGroupFamily: redis6.x
+      Properties:
+        maxmemory-policy: volatile-lru
+        notify-keyspace-events: KEA
+        timeout: 300
+
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: xnl-fintech-redis
+      ReplicationGroupDescription: Redis cluster for XNL Fintech Platform
+      Engine: redis
+      EngineVersion: 6.2
+      CacheNodeType: 
+        Ref: NodeType
+      Port: 6379
+      CacheParameterGroupName: 
+        Ref: RedisParameterGroup
+      CacheSubnetGroupName: 
+        Ref: RedisSubnetGroup
+      SecurityGroupIds:
+        - Fn::GetAtt: [RedisSecurityGroup, GroupId]
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      MultiAZ: true
+      AutomaticFailoverEnabled: true
+      NumNodeGroups: 
+        Ref: NumShards
+      ReplicasPerNodeGroup: 
+        Ref: ReplicasPerShard
+      Tags:
+        - Key: Name
+          Value: xnl-fintech-redis
+        - Key: Environment
+          Value: production
+
+Outputs:
+  RedisClusterEndpoint:
+    Description: The configuration endpoint for the Redis cluster
+    Value: 
+      Fn::GetAtt: [RedisReplicationGroup, ConfigurationEndPoint.Address]
+
+  RedisClusterPort:
+    Description: The port on which the Redis cluster accepts connections
+    Value: 
+      Fn::GetAtt: [RedisReplicationGroup, ConfigurationEndPoint.Port]
+
+  RedisConnectionString:
+    Description: Connection string for the Redis cluster
+    Value: 
+      Fn::Join:
+        - ""
+        - - "redis://"
+          - Fn::GetAtt: [RedisReplicationGroup, ConfigurationEndPoint.Address]
+          - ":"
+          - Fn::GetAtt: [RedisReplicationGroup, ConfigurationEndPoint.Port] 

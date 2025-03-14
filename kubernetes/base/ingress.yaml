@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: xnl-fintech-ingress
+  namespace: xnl-fintech
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+  - host: xnl-fintech.example.com
+    http:
+      paths:
+      - path: /api/users/?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 3001
+      - path: /api/accounts/?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: account-service
+            port:
+              number: 3002
+      - path: /api/transactions/?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: transaction-service
+            port:
+              number: 3003
+      - path: /api/notifications/?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 3004
+      - path: /api/?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 80
+      - path: /?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80 
